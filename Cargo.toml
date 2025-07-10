@@ -1,0 +1,23 @@
+[package]
+name = "launcher"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+windows = { version = "0.61", features = [
+    "Win32_System",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_ToolHelp"
+] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.9"
+crossterm = "0.29"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
