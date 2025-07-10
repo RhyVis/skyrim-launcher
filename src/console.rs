@@ -4,6 +4,17 @@ use crossterm::{
 };
 use std::io::{self, Write};
 
+pub fn clear_screen() {
+    use crossterm::{
+        ExecutableCommand,
+        cursor::MoveTo,
+        terminal::{Clear, ClearType},
+    };
+
+    let _ = io::stdout().execute(Clear(ClearType::All));
+    let _ = io::stdout().execute(MoveTo(0, 0));
+}
+
 #[macro_export]
 macro_rules! info {
     ($($arg:tt)*) => {{

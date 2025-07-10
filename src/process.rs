@@ -1,5 +1,5 @@
-use crate::error;
 use crate::wait_exit;
+use crate::{debug, error};
 use anyhow::Result;
 use std::mem::size_of;
 use std::path::Path;
@@ -37,7 +37,7 @@ pub fn retry_find_process_by_name(name: &str, retries: u32) -> Result<u32> {
             Ok(pid) => return Ok(pid),
             Err(e) if attempts < retries => {
                 attempts += 1;
-                error!("Attempt {}: {}", attempts, e);
+                debug!("Attempt {}: {}", attempts, e);
                 std::thread::sleep(std::time::Duration::from_secs(1));
             }
             Err(e) => return Err(e),
@@ -82,7 +82,7 @@ impl ProcessIter {
         unsafe { Process32FirstW(h_process_snapshot, &mut pe)? };
 
         let pid = pe.th32ProcessID;
-        let name = String::from_utf16_lossy(&pe.szExeFile);
+        let name = get_exe_name_from_pe(&pe);
 
         Ok(Self {
             index: 0,
@@ -111,12 +111,12 @@ impl Iterator for ProcessIter {
         }
 
         let pid = pe.th32ProcessID;
-        let name = String::from_utf16_lossy(&pe.szExeFile);
+        let name = get_exe_name_from_pe(&pe);
         Some(ProcessInfo { pid, name })
     }
 }
 
-pub fn wait_for_process_exit(pid: u32) -> Result<u32> {
+pub fn wait_for_process_exit(pid: u32) -> Result<i32> {
     let mut h_process = unsafe {
         OpenProcess(
             PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_SYNCHRONIZE,
@@ -137,7 +137,7 @@ pub fn wait_for_process_exit(pid: u32) -> Result<u32> {
         if exit_code == STILL_ACTIVE.0 as u32 {
             return Err(anyhow::anyhow!("The process is still running"));
         }
-        Ok(exit_code)
+        Ok(exit_code as i32)
     } else {
         unsafe { h_process.free() };
         Err(anyhow::anyhow!(
@@ -145,6 +145,16 @@ pub fn wait_for_process_exit(pid: u32) -> Result<u32> {
             pid
         ))
     }
+}
+
+fn get_exe_name_from_pe(pe: &PROCESSENTRY32W) -> String {
+    let name_bytes = &pe.szExeFile;
+    let null_pos = name_bytes
+        .iter()
+        .position(|&c| c == 0)
+        .unwrap_or(name_bytes.len());
+
+    String::from_utf16_lossy(&name_bytes[..null_pos])
 }
 
 #[cfg(test)]

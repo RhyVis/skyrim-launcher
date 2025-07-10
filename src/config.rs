@@ -33,7 +33,7 @@ impl Config {
             .expect("Failed to get current directory")
             .to_string_lossy()
             .to_string();
-        let config_path = Path::new(&current_path).join("config.toml");
+        let config_path = Path::new(&current_path).join("launcher.toml");
         let config = match std::fs::read_to_string(&config_path) {
             Ok(content) => toml::from_str::<Config>(&content),
             Err(err) => match err.kind() {
