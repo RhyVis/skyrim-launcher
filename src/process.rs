@@ -4,7 +4,9 @@ use anyhow::Result;
 use std::mem::size_of;
 use std::path::Path;
 use std::process::Command;
-use windows::Win32::Foundation::{HANDLE, STILL_ACTIVE, WAIT_OBJECT_0};
+use windows::Win32::Foundation::{
+    HANDLE, STILL_ACTIVE, WAIT_FAILED, WAIT_IO_COMPLETION, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
@@ -61,6 +63,7 @@ pub struct ProcessInfo {
     pub name: String,
 }
 
+#[derive(Debug)]
 pub struct ProcessIter {
     index: usize,
     process_info: ProcessInfo,
@@ -126,9 +129,28 @@ pub fn wait_for_process_exit(pid: u32) -> Result<i32> {
     };
 
     let wait_result = unsafe { WaitForSingleObject(h_process, INFINITE) };
-
-    if wait_result != WAIT_OBJECT_0 {
-        return Err(anyhow::anyhow!("Wait failed: {}", wait_result.0));
+    match wait_result {
+        WAIT_OBJECT_0 => debug!("Process {} exited successfully", pid),
+        WAIT_IO_COMPLETION => debug!("Process {} exited with IO completion", pid),
+        WAIT_TIMEOUT => {
+            unsafe { h_process.free() };
+            return Err(anyhow::anyhow!("Wait timed out for process {}", pid));
+        }
+        WAIT_FAILED => {
+            unsafe { h_process.free() };
+            return Err(anyhow::anyhow!(
+                "Wait failed for process {}: {}",
+                pid,
+                wait_result.0
+            ));
+        }
+        _ => {
+            unsafe { h_process.free() };
+            return Err(anyhow::anyhow!(
+                "Failed to wait for process exit: {}",
+                wait_result.0
+            ));
+        }
     }
 
     let mut exit_code: u32 = 0;
